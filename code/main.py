@@ -80,18 +80,21 @@ def main():
 	#device = "cpu"
 	model = Encoder_Decoder()
 	model.to(device)
-	criterion = nn.BCELoss()
-	optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+	criterion = nn.BCEWithLogitsLoss()
+	optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
-	num_epochs = 2
+	num_epochs = 4
 	
+	model.train()
+
 	for epoch in range(num_epochs):
 		running_loss = 0.0
+		data_len = len(trainloader)
 		for i, data in enumerate(trainloader, 0):
-			mini_batch_size = len(sample)
 			sample, target, road_image, extra  = data
 			optimizer.zero_grad()
 			outputs = model(torch.stack(sample).to(device))
+			outputs = torch.squeeze(outputs)
 			road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(device)
 			
 			#loss = ComputeLoss(criterion, road_image_true, outputs)
@@ -100,12 +103,15 @@ def main():
 			loss = criterion(outputs, road_image_true)
 			loss.backward()
 			optimizer.step()
-
 			running_loss += loss.item()
+			#if i%10 == 0:
+			#	print(loss.item())
+			'''
 			if i % mini_batch_size == mini_batch_size-1:
 				print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / mini_batch_size))
 				running_loss = 0.0
-
+			'''
+		print('[%d, %5d] loss: %.3f' % (epoch + 1, num_epochs, running_loss / data_len))
 
 if __name__ == '__main__':
 	main()

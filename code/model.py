@@ -51,8 +51,7 @@ class Encoder_Decoder(nn.Module):
             #Current Size:- 32 x 400 x 400
         	nn.ConvTranspose2d(32, 1,kernel_size=4, stride=2, padding=1),
         	nn.ReLU(inplace=True),
-        	#Current Size:- 2 x 800 x 800
-        	nn.Sigmoid()
+        	#Current Size:- 1 x 800 x 800
         )
 
     def forward(self, x):
