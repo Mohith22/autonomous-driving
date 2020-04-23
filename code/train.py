@@ -254,7 +254,7 @@ def main():
             running_loss += loss.item()
 
         print('[%d, %5d] loss: %.3f' % (epoch + 1, num_epochs, running_loss / data_len))
-
+        torch.save(model.state_dict(), 'model_'+str(epoch)+'.pth')
 
 if __name__ == '__main__':
 	main()
