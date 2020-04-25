@@ -19,83 +19,20 @@ import torch.optim as optim
 import torch.nn.init as init
 
 from data_helper import UnlabeledDataset, LabeledDataset
-from helper import collate_fn, draw_box
+from helper import collate_fn, draw_box, weight_init
 
 from model import *
 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
-#transform = torchvision.transforms.ToTensor()
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-def weight_init(m):
-
-    if isinstance(m, nn.Conv1d):
-        init.normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.Conv2d):
-        init.xavier_normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.Conv3d):
-        init.xavier_normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.ConvTranspose1d):
-        init.normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.ConvTranspose2d):
-        init.xavier_normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.ConvTranspose3d):
-        init.xavier_normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.BatchNorm1d):
-        init.normal_(m.weight.data, mean=1, std=0.02)
-        init.constant_(m.bias.data, 0)
-    elif isinstance(m, nn.BatchNorm2d):
-        init.normal_(m.weight.data, mean=1, std=0.02)
-        init.constant_(m.bias.data, 0)
-    elif isinstance(m, nn.BatchNorm3d):
-        init.normal_(m.weight.data, mean=1, std=0.02)
-        init.constant_(m.bias.data, 0)
-    elif isinstance(m, nn.Linear):
-        init.xavier_normal_(m.weight.data)
-        init.normal_(m.bias.data)
-    elif isinstance(m, nn.LSTM):
-        for param in m.parameters():
-            if len(param.shape) >= 2:
-                init.orthogonal_(param.data)
-            else:
-                init.normal_(param.data)
-    elif isinstance(m, nn.LSTMCell):
-        for param in m.parameters():
-            if len(param.shape) >= 2:
-                init.orthogonal_(param.data)
-            else:
-                init.normal_(param.data)
-    elif isinstance(m, nn.GRU):
-        for param in m.parameters():
-            if len(param.shape) >= 2:
-                init.orthogonal_(param.data)
-            else:
-                init.normal_(param.data)
-    elif isinstance(m, nn.GRUCell):
-        for param in m.parameters():
-            if len(param.shape) >= 2:
-                init.orthogonal_(param.data)
-            else:
-                init.normal_(param.data)
 
 #Load data return data loaders
 def LoadData(image_folder):
@@ -130,18 +67,20 @@ def evaluate(model, valloader):
 
 def main():
 
-    image_folder = '../data'
-    model_dir = 'BasicSSL'
+    args = parse_args()
+    set_seed(args.seed)
+
+    image_folder = args.data_dir
+    model_dir = args.model_dir
+
     trainloader, valloader = LoadData(image_folder)
     
     image, camera_index = iter(trainloader).next()
 
     model = BasicClassifierSSL()
-    #model = torch.hub.load('pytorch/vision:v0.6.0', 'alexnet', pretrained=False)
-    #model.classifier[6] = nn.Linear(4096,6)
 
-    model.to(device)
-    model.apply(weight_init)
+    model.to(args.device)
+    model = model.apply(weight_init)
     
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     criterion = nn.CrossEntropyLoss()

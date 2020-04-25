@@ -14,87 +14,25 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
-#from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 import torch.optim as optim
-import torch.nn.init as init
+from arguments import parse_args
 
 from data_helper import UnlabeledDataset, LabeledDataset
-from helper import collate_fn, draw_box
+from helper import collate_fn, draw_box, weight_init
 
 from model import *
 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 #transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
-def weight_init(m):
-    if isinstance(m, nn.Conv1d):
-        init.normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.Conv2d):
-        init.xavier_normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.Conv3d):
-        init.xavier_normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.ConvTranspose1d):
-        init.normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.ConvTranspose2d):
-        init.xavier_normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.ConvTranspose3d):
-        init.xavier_normal_(m.weight.data)
-        if m.bias is not None:
-            init.normal_(m.bias.data)
-    elif isinstance(m, nn.BatchNorm1d):
-        init.normal_(m.weight.data, mean=1, std=0.02)
-        init.constant_(m.bias.data, 0)
-    elif isinstance(m, nn.BatchNorm2d):
-        init.normal_(m.weight.data, mean=1, std=0.02)
-        init.constant_(m.bias.data, 0)
-    elif isinstance(m, nn.BatchNorm3d):
-        init.normal_(m.weight.data, mean=1, std=0.02)
-        init.constant_(m.bias.data, 0)
-    elif isinstance(m, nn.Linear):
-        init.xavier_normal_(m.weight.data)
-        init.normal_(m.bias.data)
-    elif isinstance(m, nn.LSTM):
-        for param in m.parameters():
-            if len(param.shape) >= 2:
-                init.orthogonal_(param.data)
-            else:
-                init.normal_(param.data)
-    elif isinstance(m, nn.LSTMCell):
-        for param in m.parameters():
-            if len(param.shape) >= 2:
-                init.orthogonal_(param.data)
-            else:
-                init.normal_(param.data)
-    elif isinstance(m, nn.GRU):
-        for param in m.parameters():
-            if len(param.shape) >= 2:
-                init.orthogonal_(param.data)
-            else:
-                init.normal_(param.data)
-    elif isinstance(m, nn.GRUCell):
-        for param in m.parameters():
-            if len(param.shape) >= 2:
-                init.orthogonal_(param.data)
-            else:
-                init.normal_(param.data)
+
 
 #Load data return data loaders
 def LoadData(image_folder, annotation_csv):
@@ -127,14 +65,6 @@ def ThreatScore(true, pred):
 				FN += 1
 	return TP/(TP+FP+FN)
 
-def ComputeLoss(criterion, true, pred):
-	loss = 0.0
-	for i in range(800):
-		for j in range(800):
-			loss += criterion(true[:,:,i,j], pred[:,i,j])
-	return loss
-
-
 def dice_loss(input, target):
     smooth = 1.
 
@@ -147,23 +77,26 @@ def dice_loss(input, target):
 
 def main():
 
-    image_folder = '../data'
-    annotation_csv = '../data/annotation.csv'
+    args = parse_args()
+    set_seed(args.seed)
+
+    image_folder = args.data_dir
+    annotation_csv = args.annotation_dir
+    model_dir = args.model_dir
+
     trainloader, valloader = LoadData(image_folder, annotation_csv)
-    
-    sample, target, road_image, extra = iter(trainloader).next()
-    #print(road_image)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #device = "cpu"
+
     model = Mini_Encoder_Decoder()
-    model.to(device)
-    model.apply(weight_init)
-    #criterion = nn.BCEWithLogitsLoss()
+    model.to(args.device)
+    model = model.apply(weight_init)
+
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
-    num_epochs = 50
-    #model.load_state_dict(torch.load("models/model_1.pth"))
+    num_epochs = args.num_train_epochs
 
+    if (not os.path.exists(model_dir)):
+        os.mkdir(model_dir)
+    
     model.train()
 
     for epoch in tqdm(range(num_epochs)):
@@ -171,19 +104,18 @@ def main():
         data_len = len(trainloader)
         for i, data in enumerate(trainloader, 0):
             sample, target, road_image, extra  = data
+            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
             optimizer.zero_grad()
-            outputs = model(torch.stack(sample).to(device))
+            outputs = model(torch.stack(sample).to(args.device))
             outputs = torch.squeeze(outputs)
-            #loss = criterion(outputs, road_image_true) + 10*criterion(outputs*road_image_true, road_image_true)
             loss = dice_loss(road_image_true, outputs)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
 
         print('[%d, %5d] loss: %.3f' % (epoch + 1, num_epochs, running_loss / data_len))
-        if (not os.path.exists("models_senc_dec_norm")):
-        	os.mkdir("models_senc_dec_norm")
-        torch.save(model.state_dict(), 'models_senc_dec_norm/model_'+str(epoch)+'.pth')
+    
+        torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
 
 if __name__ == '__main__':
 	main()
