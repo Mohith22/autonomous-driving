@@ -1,5 +1,3 @@
-#Object Detection Baseline 
-
 import os
 import random
 from  tqdm import tqdm
@@ -23,7 +21,7 @@ import torch.nn.init as init
 from data_helper import UnlabeledDataset, LabeledDataset
 from helper import collate_fn, draw_box
 
-from model import Encoder_Decoder, SEncoder_Decoder, SEncoder, SDecoder #From model.py
+from model import Encoder_Decoder, SEncoder_Decoder, SEncoder, SDecoder, Spatial_Encoder_Decoder #From model.py
 
 random.seed(0)
 np.random.seed(0)
@@ -92,7 +90,7 @@ def weight_init(m):
                 init.orthogonal_(param.data)
             else:
                 init.normal_(param.data)
-
+                
 #Load data return data loaders
 def LoadData(image_folder, annotation_csv):
 	train_labeled_scene_index = np.arange(106, 128)
@@ -103,8 +101,8 @@ def LoadData(image_folder, annotation_csv):
 	labeled_valset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,
 		scene_index=val_labeled_scene_index,transform=transform,extra_info=True)
 
-	trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=2, shuffle=True, num_workers=2, collate_fn=collate_fn)
-	valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=2, shuffle=True, num_workers=2, collate_fn=collate_fn)
+	trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=8, shuffle=True, num_workers=2, collate_fn=collate_fn)
+	valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=8, shuffle=True, num_workers=2, collate_fn=collate_fn)
 
 	return trainloader, valloader
 
@@ -131,6 +129,17 @@ def ComputeLoss(criterion, true, pred):
 			loss += criterion(true[:,:,i,j], pred[:,i,j])
 	return loss
 
+
+def dice_loss(input, target):
+    smooth = 1.
+
+    iflat = input.view(-1)
+    tflat = target.view(-1)
+    intersection = (iflat * tflat).sum()
+    
+    return 1 - ((2. * intersection + smooth) /
+              (iflat.sum() + tflat.sum() + smooth))
+
 def main():
 
     image_folder = '../data'
@@ -141,14 +150,15 @@ def main():
     #print(road_image)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     #device = "cpu"
-    model = SEncoder_Decoder()
+    model = Spatial_Encoder_Decoder()
     model.to(device)
     model.apply(weight_init)
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
-    num_epochs = 10
-    model.load_state_dict(torch.load("models/model_1.pth"))
+    num_epochs = 50
+
+    #model.load_state_dict(torch.load("models2/model_3.pth"))
 
     model.train()
 
@@ -159,17 +169,18 @@ def main():
             sample, target, road_image, extra  = data
             optimizer.zero_grad()
             outputs = model(torch.stack(sample).to(device))
-            outputs = torch.squeeze(outputs)
-            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(device)
-            loss = criterion(outputs, road_image_true) + 10*criterion(outputs*road_image_true, road_image_true)
+            #outputs = torch.squeeze(outputs) - Comment this line for spatial
+            road_image_true = torch.stack([torch.Tensor(x.numpy()).long() for x in road_image]).to(device)
+            loss = criterion(outputs, road_image_true) + 5*criterion(outputs*road_image_true.unsqueeze(dim=1), road_image_true)
+            loss = dice_loss(road_image_true, outputs)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
 
         print('[%d, %5d] loss: %.3f' % (epoch + 1, num_epochs, running_loss / data_len))
-        if (not os.path.exists("models")):
-        	os.mkdir("models")
-        torch.save(model.state_dict(), 'models/model_'+str(epoch)+'.pth')
+        if (not os.path.exists("models_spatial_dice")):
+        	os.mkdir("models_spatial_dice")
+        torch.save(model.state_dict(), 'models_spatial_dice/model_'+str(epoch)+'.pth')
 
 if __name__ == '__main__':
 	main()

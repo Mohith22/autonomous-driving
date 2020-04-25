@@ -1,5 +1,3 @@
-#Object Detection Baseline 
-
 import os
 import random
 from  tqdm import tqdm
@@ -15,7 +13,7 @@ matplotlib.rcParams['figure.dpi'] = 200
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
+from torchvision import transforms
 #from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 import torch.optim as optim
 import torch.nn.init as init
@@ -23,14 +21,19 @@ import torch.nn.init as init
 from data_helper import UnlabeledDataset, LabeledDataset
 from helper import collate_fn, draw_box
 
-from model import Encoder_Decoder, SEncoder_Decoder, SEncoder, SDecoder, Spatial_Encoder_Decoder #From model.py
+from model import *
 
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)
 
-transform = torchvision.transforms.ToTensor()
-
+#transform = torchvision.transforms.ToTensor()
+transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
 def weight_init(m):
     if isinstance(m, nn.Conv1d):
         init.normal_(m.weight.data)
@@ -92,7 +95,7 @@ def weight_init(m):
                 init.orthogonal_(param.data)
             else:
                 init.normal_(param.data)
-                
+
 #Load data return data loaders
 def LoadData(image_folder, annotation_csv):
 	train_labeled_scene_index = np.arange(106, 128)
@@ -103,8 +106,8 @@ def LoadData(image_folder, annotation_csv):
 	labeled_valset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,
 		scene_index=val_labeled_scene_index,transform=transform,extra_info=True)
 
-	trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=8, shuffle=True, num_workers=2, collate_fn=collate_fn)
-	valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=8, shuffle=True, num_workers=2, collate_fn=collate_fn)
+	trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=2, shuffle=True, num_workers=2, collate_fn=collate_fn)
+	valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=2, shuffle=True, num_workers=2, collate_fn=collate_fn)
 
 	return trainloader, valloader
 
@@ -152,15 +155,14 @@ def main():
     #print(road_image)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     #device = "cpu"
-    model = Spatial_Encoder_Decoder()
+    model = Mini_Encoder_Decoder()
     model.to(device)
     model.apply(weight_init)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    #criterion = nn.BCEWithLogitsLoss()
+    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     num_epochs = 50
-
-    #model.load_state_dict(torch.load("models2/model_3.pth"))
+    #model.load_state_dict(torch.load("models/model_1.pth"))
 
     model.train()
 
@@ -171,18 +173,17 @@ def main():
             sample, target, road_image, extra  = data
             optimizer.zero_grad()
             outputs = model(torch.stack(sample).to(device))
-            #outputs = torch.squeeze(outputs) - Comment this line for spatial
-            road_image_true = torch.stack([torch.Tensor(x.numpy()).long() for x in road_image]).to(device)
-            #loss = criterion(outputs, road_image_true) + 5*criterion(outputs*road_image_true.unsqueeze(dim=1), road_image_true)
+            outputs = torch.squeeze(outputs)
+            #loss = criterion(outputs, road_image_true) + 10*criterion(outputs*road_image_true, road_image_true)
             loss = dice_loss(road_image_true, outputs)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
 
         print('[%d, %5d] loss: %.3f' % (epoch + 1, num_epochs, running_loss / data_len))
-        if (not os.path.exists("models_spatial_dice")):
-        	os.mkdir("models_spatial_dice")
-        torch.save(model.state_dict(), 'models_spatial_dice/model_'+str(epoch)+'.pth')
+        if (not os.path.exists("models_senc_dec_norm")):
+        	os.mkdir("models_senc_dec_norm")
+        torch.save(model.state_dict(), 'models_senc_dec_norm/model_'+str(epoch)+'.pth')
 
 if __name__ == '__main__':
 	main()
