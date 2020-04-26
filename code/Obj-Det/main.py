@@ -102,7 +102,7 @@ def main():
     model.to(args.device)
     model = model.apply(weight_init)
 
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
     num_epochs = args.num_train_epochs
 

@@ -79,13 +79,13 @@ def evaluate(model, valloader, args):
     with torch.no_grad():
         for data in valloader:
             sample, target, road_image, extra  = data
-            target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
+            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
             outputs = model(torch.stack(sample).to(args.device))
             outputs = torch.squeeze(outputs)
-            ts += ThreatScore(target_seg_mask, outputs)
-            loss += dice_loss(target_seg_mask, outputs)
+            ts += ThreatScore(road_image_true, outputs)
+            loss += dice_loss(road_image_true, outputs)
 
-    return loss/len(valloader)
+    return loss/len(valloader), ts/(len(valloader)*8)
 
 def main():
 
@@ -102,7 +102,7 @@ def main():
     model.to(args.device)
     model = model.apply(weight_init)
 
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
     num_epochs = args.num_train_epochs
 
@@ -110,7 +110,7 @@ def main():
         os.mkdir(model_dir)
 
     best_eval_acc = 0.0
-    
+
     for epoch in tqdm(range(num_epochs)):
         running_loss = 0.0
         data_len = len(trainloader)
