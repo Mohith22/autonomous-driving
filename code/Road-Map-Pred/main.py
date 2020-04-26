@@ -50,8 +50,16 @@ def LoadData(image_folder, annotation_csv):
 
 #ThreatScore Per Sample - Determines Model Performance - Challenge Metric
 def ThreatScore(true, pred):
-    tp = (true * pred).sum().item()
-    return tp * 1.0 / (true.sum().item() + pred.sum().item() - tp)
+    tp = (true * pred).sum()
+    return (tp * 1.0 / (true.sum() + pred.sum() - tp)).item()
+
+#ThreatScore Per Batch- Determines Model Performance - Challenge Metric
+def BatchThreatScore(true, pred):
+    batch_size = true.size(0)
+    true = true.reshape(batch_size, -1)
+    pred = pred.reshape(batch_size, -1)
+    tp = (true * pred).sum(1)
+    return (tp * 1.0 / (true.sum(1) + pred.sum(1) - tp)).sum().item()
 
 def dice_loss(input, target):
     smooth = 1.
