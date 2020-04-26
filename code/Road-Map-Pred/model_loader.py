@@ -10,6 +10,7 @@ import torchvision
 
 # import your model class
 # import ...
+from model import *
 
 # Put your transform function here, we will use it for our dataloader
 def get_transform(): 
@@ -32,7 +33,9 @@ class ModelLoader():
         #       3. call cuda()
         # self.model = ...
         # 
-        pass
+        self.model = Mini_Encoder_Decoder()
+        self.model.load_state_dict(torch.load(model_file))
+        self.model = self.model.cuda()
 
     def get_bounding_boxes(samples):
         # samples is a cuda tensor with size [batch_size, 6, 3, 256, 306]
@@ -45,4 +48,4 @@ class ModelLoader():
         # samples is a cuda tensor with size [batch_size, 6, 3, 256, 306]
         # You need to return a cuda tensor with size [batch_size, 800, 800] 
         
-        pass
+        return self.model(sample)

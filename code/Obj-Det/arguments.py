@@ -8,7 +8,7 @@ def parse_args():
 	parser.add_argument("--data_dir", 
 						type=str,
 						default="../data",
-						help="Data file path"
+						help="Data file path",
 						required=True,
 						)
 	parser.add_argument("--annotation_dir", 
