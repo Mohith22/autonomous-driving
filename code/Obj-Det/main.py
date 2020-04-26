@@ -81,7 +81,7 @@ def evaluate(model, valloader, args):
             sample, target, road_image, extra  = data
             target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
             outputs = model(torch.stack(sample).to(args.device))
-            outputs = torch.squeeze(outputs)
+            outputs = torch.squeeze(outputs,dim=1)
             ts += BatchThreatScore(target_seg_mask, outputs)
             loss += dice_loss(target_seg_mask, outputs)
 
@@ -120,7 +120,7 @@ def main():
             target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
             optimizer.zero_grad()
             outputs = model(torch.stack(sample).to(args.device))
-            outputs = torch.squeeze(outputs)
+            outputs = torch.squeeze(outputs,dim=1)
             loss = dice_loss(target_seg_mask, outputs)
             loss.backward()
             optimizer.step()
