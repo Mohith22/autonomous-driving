@@ -44,8 +44,8 @@ def LoadData(image_folder, annotation_csv):
 	labeled_valset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,
 		scene_index=val_labeled_scene_index,transform=transform,extra_info=True)
 
-	trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=8, shuffle=True, num_workers=2, collate_fn=collate_fn)
-	valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=8, shuffle=True, num_workers=2, collate_fn=collate_fn)
+	trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
+	valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
 
 	return trainloader, valloader
 
