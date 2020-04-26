@@ -30,22 +30,21 @@ def set_seed(seed):
 #transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 
 #Load data return data loaders
 def LoadData(image_folder, annotation_csv):
-	train_labeled_scene_index = np.arange(106, 128)
-	val_labeled_scene_index = np.arange(128, 134)
+	train_labeled_scene_index = np.arange(106, 128) #128
+	val_labeled_scene_index = np.arange(128, 134) #134
 	labeled_trainset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv, 
 		scene_index=train_labeled_scene_index, transform=transform, extra_info=True)
 
 	labeled_valset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,
 		scene_index=val_labeled_scene_index,transform=transform,extra_info=True)
 
-	trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=2, shuffle=True, num_workers=2, collate_fn=collate_fn)
-	valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=2, shuffle=True, num_workers=2, collate_fn=collate_fn)
+	trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=8, shuffle=True, num_workers=2, collate_fn=collate_fn)
+	valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=8, shuffle=True, num_workers=2, collate_fn=collate_fn)
 
 	return trainloader, valloader
 
@@ -63,6 +62,19 @@ def dice_loss(input, target):
     
     return 1 - ((2. * intersection + smooth) /
               (iflat.sum() + tflat.sum() + smooth))
+
+def evaluate(model, valloader, args):
+    model.eval()
+    ts = 0
+    with torch.no_grad():
+        for data in valloader:
+            sample, target, road_image, extra  = data
+            target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
+            outputs = model(torch.stack(sample).to(args.device))
+            outputs = torch.squeeze(outputs)
+            ts += ThreatScore(target_seg_mask, outputs)
+
+    return ts/len(valloader)
 
 def main():
 
@@ -86,14 +98,14 @@ def main():
     if (not os.path.exists(model_dir)):
         os.mkdir(model_dir)
     
-    model.train()
+    best_eval_acc = 0.0
 
     for epoch in tqdm(range(num_epochs)):
         running_loss = 0.0
         data_len = len(trainloader)
         for i, data in enumerate(trainloader, 0):
+            model.train()
             sample, target, road_image, extra  = data
-
             target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
             optimizer.zero_grad()
             outputs = model(torch.stack(sample).to(args.device))
@@ -103,9 +115,12 @@ def main():
             optimizer.step()
             running_loss += loss.item()
 
-        print('[%d, %5d] loss: %.3f' % (epoch + 1, num_epochs, running_loss / data_len))
-    
-        torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
+        eval_acc = evaluate(model, valloader, args)
+        print('[%d, %5d] Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / data_len, eval_acc))
+        
+        if eval_acc > best_eval_acc: 
+            torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
+            best_eval_acc = eval_acc
 
 if __name__ == '__main__':
 	main()
