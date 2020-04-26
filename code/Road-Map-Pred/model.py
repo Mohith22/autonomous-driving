@@ -65,7 +65,6 @@ class Mini_Encoder_Decoder(nn.Module):
 
     def forward(self, x):
         x = x.permute(1,0,2,3,4)
-        x = x = ((x-x.min())/(x.max()-x.min())) - 0.5
         encoder_outs = []
         for i in range(6):
             encoder_outs.append(self.encoders[i](x[i]))
