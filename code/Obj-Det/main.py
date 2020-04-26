@@ -48,10 +48,10 @@ def LoadData(image_folder, annotation_csv):
 
 	return trainloader, valloader
 
-#ThreatScore - Determines Model Performance - Challenge Metric
+#ThreatScore Per Sample - Determines Model Performance - Challenge Metric
 def ThreatScore(true, pred):
-    tp = (true * pred).sum()
-    return tp * 1.0 / (true.sum() + pred.sum() - tp)
+    tp = (true * pred).sum().item()
+    return tp * 1.0 / (true.sum().item() + pred.sum().item() - tp)
 
 def dice_loss(input, target):
     smooth = 1.
