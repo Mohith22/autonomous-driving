@@ -30,7 +30,7 @@ def set_seed(seed):
 #transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 
@@ -109,6 +109,8 @@ def main():
     if (not os.path.exists(model_dir)):
         os.mkdir(model_dir)
 
+    best_eval_acc = 0.0
+    
     for epoch in tqdm(range(num_epochs)):
         running_loss = 0.0
         data_len = len(trainloader)
@@ -124,9 +126,9 @@ def main():
             optimizer.step()
             running_loss += loss.item()
 
-        eval_loss = evaluate(model, valloader, args)
-        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f' % (epoch + 1, num_epochs, running_loss / data_len, eval_loss))
-    
+        eval_loss, eval_acc = evaluate(model, valloader, args)
+        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / data_len, eval_loss, eval_acc))
+        
         torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
         if eval_acc > best_eval_acc: 
             torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))

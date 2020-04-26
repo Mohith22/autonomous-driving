@@ -30,7 +30,7 @@ def set_seed(seed):
 #transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 
@@ -82,10 +82,10 @@ def evaluate(model, valloader, args):
             target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
             outputs = model(torch.stack(sample).to(args.device))
             outputs = torch.squeeze(outputs)
-            ts += ThreatScore(target_seg_mask, outputs)
+            ts += BatchThreatScore(target_seg_mask, outputs)
             loss += dice_loss(target_seg_mask, outputs)
 
-    return loss/len(valloader)
+    return loss/len(valloader), ts/(len(valloader)*8)
 
 def main():
 
@@ -126,8 +126,8 @@ def main():
             optimizer.step()
             running_loss += loss.item()
 
-        eval_loss = evaluate(model, valloader, args)
-        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f' % (epoch + 1, num_epochs, running_loss / data_len, eval_loss))
+        eval_loss, eval_acc = evaluate(model, valloader, args)
+        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / data_len, eval_loss, eval_acc))
         
         if eval_acc > best_eval_acc: 
             torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
