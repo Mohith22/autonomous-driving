@@ -9,13 +9,13 @@ import torch.nn.init as init
 
 def convert_target_to_seg_mask(boxes):
     # [Nobjs, 2, 4]
-    seg_mask = torch.zeros((800,800), dtype=torch.bool)
+    seg_mask = torch.zeros((800,800))
     for box in boxes:
         minx = int(box[0].min() * 10 + 400)
         maxx = int(box[0].max() * 10 + 400)
         miny = int(box[1].min() * 10 + 400)
         maxy = int(box[1].max() * 10 + 400)
-        seg_mask[miny:maxy+1, minx:maxx+1] = True
+        seg_mask[miny:maxy+1, minx:maxx+1] = 1
     #print(seg_mask)
     return seg_mask
 

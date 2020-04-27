@@ -29,15 +29,16 @@ def set_seed(seed):
 
 #transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-
 #Load data return data loaders
 def LoadData(image_folder, annotation_csv):
-	train_labeled_scene_index = np.arange(106, 128) #128
-	val_labeled_scene_index = np.arange(128, 134) #134
+	train_labeled_scene_index = np.arange(106, 131) #128
+	val_labeled_scene_index = np.arange(131, 134) #134
 	labeled_trainset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv, 
 		scene_index=train_labeled_scene_index, transform=transform, extra_info=True)
 
@@ -82,10 +83,11 @@ def evaluate(model, valloader, args):
             target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
             outputs = model(torch.stack(sample).to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
-            ts += BatchThreatScore(target_seg_mask, outputs)
             loss += dice_loss(target_seg_mask, outputs)
+            outputs = outputs >= 0.5
+            ts += BatchThreatScore(target_seg_mask, outputs)
 
-    return loss/len(valloader), ts/(len(valloader)*8)
+    return loss/(8*len(valloader)), ts/(len(valloader)*8)
 
 def main():
 
@@ -98,11 +100,12 @@ def main():
 
     trainloader, valloader = LoadData(image_folder, annotation_csv)
 
-    model = Mini_Encoder_Decoder()
+    model = Resnet_Encoder_Decoder(args.use_bce)
     model.to(args.device)
     model = model.apply(weight_init)
 
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    criterion = nn.BCEWithLogitsLoss()
 
     num_epochs = args.num_train_epochs
 
@@ -118,19 +121,27 @@ def main():
         for i, data in enumerate(trainloader, 0):
             sample, target, road_image, extra  = data
             target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
+            #print(torch.min(target_seg_mask[0]), torch.max(target_seg_mask[0]))
             optimizer.zero_grad()
             outputs = model(torch.stack(sample).to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
-            loss = dice_loss(target_seg_mask, outputs)
-            loss.backward()
+            if (args.use_bce):
+                loss = 0.5*criterion(target_seg_mask, outputs)
+                outputs = torch.sigmoid(outputs)
+                loss += 0.5*dice_loss(target_seg_mask, outputs)
+                loss.backward()
+            else:
+                loss = dice_loss(target_seg_mask, outputs)
+                loss.backward()
             optimizer.step()
             running_loss += loss.item()
 
         eval_loss, eval_acc = evaluate(model, valloader, args)
-        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / data_len, eval_loss, eval_acc))
+        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (8*data_len), eval_loss, eval_acc))
         
+        torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
         if eval_acc > best_eval_acc: 
-            torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
+            torch.save(model.state_dict(), os.path.join(model_dir,'bestmodel_'+str(epoch)+'.pth'))
             best_eval_acc = eval_acc
 
 if __name__ == '__main__':

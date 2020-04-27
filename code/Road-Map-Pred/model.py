@@ -52,6 +52,91 @@ class BasicClassifierSSL(nn.Module):
         x = self.fc1(x)
         return x
 
+# ---------------- Modified Resnet ENCODER ---------------- #
+class Resnet_Encoder_Decoder(nn.Module):
+    def __init__(self, use_bce=False):
+        super(Resnet_Encoder_Decoder, self).__init__()
+        self.encoders = nn.ModuleList()
+        for _ in range(6):
+            self.encoders.append(Resnet_Encoder())
+        self.decoder = Resnet_Decoder()
+        self.sigmoid = nn.Sigmoid()
+        self.use_bce = use_bce
+          
+    def forward(self, x):
+        x = x.permute(1,0,2,3,4)
+        encoder_outs = []
+        for i in range(6):
+            encoder_outs.append(self.encoders[i](x[i]))
+        encoder_output = torch.stack(encoder_outs).permute(0,2,1,3,4)
+        encoder_output = torch.cat([i for i in encoder_output]).permute(1,0,2,3)
+        decoder_output = self.decoder(encoder_output)
+        if (not self.use_bce):
+            decoder_output = self.sigmoid(decoder_output) 
+        return decoder_output
+
+class Resnet_Encoder(nn.Module):
+    def __init__(self):
+        super(Resnet_Encoder, self).__init__()
+        resnet18 = models.resnet18(pretrained=False)
+        layers = list(resnet18.children())[0:4]
+        self.encoder_features = nn.Sequential(*layers)
+    def forward(self,x):
+        return self.encoder_features(x)
+
+class Resnet_Decoder(nn.Module):
+    def __init__(self):
+        super(Resnet_Decoder, self).__init__()
+        #Size:- 64 x 56 x 56
+        self.decoder_features = nn.Sequential(
+
+            nn.Upsample(size=(100, 100), mode='bilinear', align_corners=True),
+
+            nn.ConvTranspose2d(384, 192, kernel_size=4, stride=2, padding=1),
+
+            nn.Conv2d(192,192, kernel_size=3, padding=1),
+            nn.BatchNorm2d(192),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(192,192, kernel_size=3, padding=1),
+            nn.BatchNorm2d(192),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(192, 192, kernel_size=3, padding=1),
+            nn.BatchNorm2d(192),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(192, 96, kernel_size=4, stride=2, padding=1),
+
+            nn.Conv2d(96,96, kernel_size=3, padding=1),
+            nn.BatchNorm2d(96),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(96,96, kernel_size=3, padding=1),
+            nn.BatchNorm2d(96),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(96, 96, kernel_size=3, padding=1),
+            nn.BatchNorm2d(96),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(96, 48, kernel_size=4, stride=2, padding=1),
+
+            nn.Conv2d(48,32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(32,16, kernel_size=3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(16, 1, kernel_size=3, padding=1),
+
+            #Current Size:- 1 x 800 x 800
+        )
+        
+    def forward(self,x):
+        return self.decoder_features(x)
 
 # ---------------- MINI ENCODER DECODER ---------------- #
 class Mini_Encoder_Decoder(nn.Module):

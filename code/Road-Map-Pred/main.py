@@ -29,6 +29,8 @@ def set_seed(seed):
 
 #transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
@@ -81,11 +83,12 @@ def evaluate(model, valloader, args):
             sample, target, road_image, extra  = data
             road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
             outputs = model(torch.stack(sample).to(args.device))
-            outputs = torch.squeeze(outputs,dim=1)
-            ts += BatchThreatScore(road_image_true, outputs)
             loss += dice_loss(road_image_true, outputs)
+            outputs = torch.squeeze(outputs,dim=1)
+            outputs = outputs >= 0.5
+            ts += BatchThreatScore(road_image_true, outputs)
 
-    return loss/len(valloader), ts/(len(valloader)*8)
+    return loss/(8*len(valloader)), ts/(len(valloader)*8)
 
 def main():
 
@@ -98,12 +101,12 @@ def main():
 
     trainloader, valloader = LoadData(image_folder, annotation_csv)
 
-    model = Mini_Encoder_Decoder()
+    model = Resnet_Encoder_Decoder(args.use_bce)
     model.to(args.device)
     model = model.apply(weight_init)
 
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-
+    criterion = nn.BCEWithLogitsLoss()
     num_epochs = args.num_train_epochs
 
     if (not os.path.exists(model_dir)):
@@ -121,17 +124,23 @@ def main():
             optimizer.zero_grad()
             outputs = model(torch.stack(sample).to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
-            loss = dice_loss(road_image_true, outputs)
-            loss.backward()
+            if (args.use_bce):
+                loss = 0.5*criterion(road_image_true, outputs)
+                outputs = torch.sigmoid(outputs)
+                loss += 0.5*dice_loss(road_image_true, outputs)
+                loss.backward()
+            else:
+                loss = dice_loss(road_image_true, outputs)
+                loss.backward()
             optimizer.step()
             running_loss += loss.item()
 
         eval_loss, eval_acc = evaluate(model, valloader, args)
-        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / data_len, eval_loss, eval_acc))
+        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (8*data_len), eval_loss, eval_acc))
         
         torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
         if eval_acc > best_eval_acc: 
-            torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
+            torch.save(model.state_dict(), os.path.join(model_dir,'bestmodel_'+str(epoch)+'.pth'))
             best_eval_acc = eval_acc
 
 if __name__ == '__main__':
