@@ -38,8 +38,8 @@ transform = transforms.Compose([
 
 #Load data return data loaders
 def LoadData(image_folder, annotation_csv):
-    train_labeled_scene_index = np.arange(106, 128) #128
-    val_labeled_scene_index = np.arange(128, 134) #134
+    train_labeled_scene_index = np.arange(106, 131) #128
+    val_labeled_scene_index = np.arange(131, 134) #134
     labeled_trainset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv, 
         scene_index=train_labeled_scene_index, transform=transform, extra_info=True)
 
@@ -124,14 +124,19 @@ def main():
             optimizer.zero_grad()
             outputs = model(torch.stack(sample).to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
-            if (args.use_bce):
+            if (args.loss == "both"):
                 loss = 0.5*criterion(road_image_true, outputs)
                 outputs = torch.sigmoid(outputs)
                 loss += 0.5*dice_loss(road_image_true, outputs)
                 loss.backward()
-            else:
+            elif (args.loss == "dice"):
+                outputs = torch.sigmoid(outputs)
                 loss = dice_loss(road_image_true, outputs)
                 loss.backward()
+            elif (args.loss == "bce"):
+                loss = criterion(road_image_true, outputs)
+                loss.backward()
+
             optimizer.step()
             running_loss += loss.item()
 

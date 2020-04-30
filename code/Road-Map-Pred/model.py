@@ -346,7 +346,7 @@ class UNet_Encoder_Decoder(nn.Module):
         encoder_output = torch.stack(encoder_outs).permute(0,2,1,3,4)
         encoder_output = torch.cat([i for i in encoder_output]).permute(1,0,2,3)
         decoder_output = self.decoder(encoder_output)
-        decoder_output = self.sigmoid(decoder_output)
+        #decoder_output = self.sigmoid(decoder_output)
         return decoder_output
 
 

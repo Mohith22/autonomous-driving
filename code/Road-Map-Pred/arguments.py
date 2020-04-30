@@ -36,9 +36,9 @@ def parse_args():
 						default=0,
 						type=int,
 						)
-	parser.add_argument("--use_bce",
-						default=False,
-						type=bool,
+	parser.add_argument("--loss",
+						default="dice",
+						type=str,
 						)
 
 
