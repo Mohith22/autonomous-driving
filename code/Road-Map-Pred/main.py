@@ -101,7 +101,7 @@ def main():
 
     trainloader, valloader = LoadData(image_folder, annotation_csv)
 
-    model = Resnet_Encoder_Decoder(args.use_bce)
+    model = UNet_Encoder_Decoder()
     model.to(args.device)
     model = model.apply(weight_init)
 
