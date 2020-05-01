@@ -328,12 +328,12 @@ class Single_Encoder_Decoder(nn.Module):
 
 # ---------------- UNET ENCODER AND DECODER ---------------- #
 class UNet_Encoder_Decoder(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels):
         super(UNet_Encoder_Decoder, self).__init__()
         #Input Size:- 3 x 256 x 306
         self.encoders = nn.ModuleList()
         for _ in range(6):
-            self.encoders.append(UNet_Encoder(3,32))    # n_channels (input channels) = 3 & n_classes (output channels) = 32
+            self.encoders.append(UNet_Encoder(in_channels,32))    # n_channels (input channels) = 3 & n_classes (output channels) = 32
         self.decoder = UNet_Decoder()
         self.sigmoid = nn.Sigmoid()
 

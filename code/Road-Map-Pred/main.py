@@ -102,7 +102,7 @@ def main():
 
     trainloader, valloader = LoadData(image_folder, annotation_csv)
 
-    model = UNet_Encoder_Decoder()
+    model = UNet_Encoder_Decoder(3)
     model.to(args.device)
     model = model.apply(weight_init)
 
@@ -114,7 +114,7 @@ def main():
         os.mkdir(model_dir)
 
     best_eval_acc = 0.0
-    model.load_state_dict(torch.load("bestmodel_6.pth"))
+    model.load_state_dict(torch.load(os.path.join(model_dir,"bestmodel_6.pth")))
 
     for epoch in tqdm(range(7, num_epochs)):
         running_loss = 0.0
