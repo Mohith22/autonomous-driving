@@ -82,7 +82,7 @@ class UnlabeledDataset(torch.utils.data.Dataset):
 
 # The dataset class for labeled data.
 class LabeledDataset(torch.utils.data.Dataset):    
-    def __init__(self, image_folder, annotation_file, scene_index, transform, extra_info=True):
+    def __init__(self, depth_folder, image_folder, annotation_file, scene_index, transform, extra_info=True):
         """
         Args:
             image_folder (string): the location of the image folder
@@ -93,6 +93,7 @@ class LabeledDataset(torch.utils.data.Dataset):
         """
         
         self.image_folder = image_folder
+        self.depth_folder = depth_folder
         self.annotation_dataframe = pd.read_csv(annotation_file)
         self.scene_index = scene_index
         self.transform = transform
@@ -106,12 +107,21 @@ class LabeledDataset(torch.utils.data.Dataset):
         sample_id = index % NUM_SAMPLE_PER_SCENE
         sample_path = os.path.join(self.image_folder, f'scene_{scene_id}', f'sample_{sample_id}') 
 
+        depth_path = os.path.join(self.depth_folder, f'scene_{scene_id}', f'sample_{sample_id}')
+
         images = []
         for image_name in image_names:
             image_path = os.path.join(sample_path, image_name)
             image = Image.open(image_path)
             images.append(self.transform(image))
         image_tensor = torch.stack(images)
+
+        depths = []
+        for depth_image in image_names:
+            depth_path = os.path.join(sample_path, depth_image)
+            image = Image.open(depth_path)
+            depths.append(self.transform(image))
+        depth_tensor = torch.stack(depths)
 
         data_entries = self.annotation_dataframe[(self.annotation_dataframe['scene'] == scene_id) & (self.annotation_dataframe['sample'] == sample_id)]
         corners = data_entries[['fl_x', 'fr_x', 'bl_x', 'br_x', 'fl_y', 'fr_y','bl_y', 'br_y']].to_numpy()
@@ -136,9 +146,9 @@ class LabeledDataset(torch.utils.data.Dataset):
             extra['ego_image'] = ego_image
             extra['lane_image'] = lane_image
 
-            return image_tensor, target, road_image, extra
+            return image_tensor, target, road_image, extra, depth_tensor
         
         else:
-            return image_tensor, target, road_image
+            return image_tensor, target, road_image, depth_tensor
 
     

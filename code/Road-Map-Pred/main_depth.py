@@ -37,13 +37,13 @@ transform = transforms.Compose([
 
 
 #Load data return data loaders
-def LoadData(image_folder, annotation_csv):
+def LoadData(depth_folder, image_folder, annotation_csv):
     train_labeled_scene_index = np.arange(106, 131) #128
     val_labeled_scene_index = np.arange(131, 134) #134
-    labeled_trainset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv, 
+    labeled_trainset = LabeledDataset(depth_folder=depth_folder, image_folder=image_folder, annotation_file=annotation_csv, 
         scene_index=train_labeled_scene_index, transform=transform, extra_info=True)
 
-    labeled_valset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,
+    labeled_valset = LabeledDataset(depth_folder=depth_folder, image_folder=image_folder, annotation_file=annotation_csv,
         scene_index=val_labeled_scene_index,transform=transform,extra_info=True)
 
     trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
@@ -99,8 +99,9 @@ def main():
     image_folder = args.data_dir
     annotation_csv = args.annotation_dir
     model_dir = args.model_dir
+    depth_folder = args.depth_dir
 
-    trainloader, valloader = LoadData(image_folder, annotation_csv)
+    trainloader, valloader = LoadData(depth_folder, image_folder, annotation_csv)
 
     model = UNet_Encoder_Decoder()
     model.to(args.device)
@@ -114,17 +115,17 @@ def main():
         os.mkdir(model_dir)
 
     best_eval_acc = 0.0
-    model.load_state_dict(torch.load("bestmodel_6.pth"))
 
-    for epoch in tqdm(range(7, num_epochs)):
+    for epoch in tqdm(range(num_epochs)):
         running_loss = 0.0
         data_len = len(trainloader)
         model.train()
         for i, data in enumerate(trainloader, 0):
-            sample, target, road_image, extra  = data
+            sample, target, road_image, extra, depths  = data
+            sample_with_depth = torch.cat((sample, depths), dim=1)
             road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
             optimizer.zero_grad()
-            outputs = model(torch.stack(sample).to(args.device))
+            outputs = model(torch.stack(sample_with_depth).to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
             if (args.loss == "both"):
                 loss = 0.5*criterion(road_image_true, outputs)
