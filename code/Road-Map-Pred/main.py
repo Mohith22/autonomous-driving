@@ -83,6 +83,7 @@ def evaluate(model, valloader, args):
             sample, target, road_image, extra  = data
             road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
             outputs = model(torch.stack(sample).to(args.device))
+            outputs = torch.sigmoid(outputs)
             loss += dice_loss(road_image_true, outputs)
             outputs = torch.squeeze(outputs,dim=1)
             outputs = outputs >= 0.5
@@ -134,7 +135,7 @@ def main():
                 loss = dice_loss(road_image_true, outputs)
                 loss.backward()
             elif (args.loss == "bce"):
-                loss = criterion(road_image_true, outputs)
+                loss = criterion(road_image_true.unsqueeze(dim=1), outputs.unsqueeze(dim=1))
                 loss.backward()
 
             optimizer.step()
