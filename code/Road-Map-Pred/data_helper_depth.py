@@ -107,7 +107,7 @@ class LabeledDataset(torch.utils.data.Dataset):
         sample_id = index % NUM_SAMPLE_PER_SCENE
         sample_path = os.path.join(self.image_folder, f'scene_{scene_id}', f'sample_{sample_id}') 
 
-        depth_path = os.path.join(self.depth_folder, f'scene_{scene_id}', f'sample_{sample_id}')
+        sample_depth_path = os.path.join(self.depth_folder, f'scene_{scene_id}', f'sample_{sample_id}')
 
         images = []
         for image_name in image_names:
@@ -118,7 +118,7 @@ class LabeledDataset(torch.utils.data.Dataset):
 
         depths = []
         for depth_image in image_names:
-            depth_path = os.path.join(sample_path, depth_image)
+            depth_path = os.path.join(sample_depth_path, depth_image)
             image = Image.open(depth_path)
             depths.append(self.transform(image))
         depth_tensor = torch.stack(depths)
