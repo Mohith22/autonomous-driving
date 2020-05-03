@@ -117,7 +117,7 @@ def main():
 
     trainloader, valloader = LoadData(depth_folder, image_folder, annotation_csv, args)
 
-    model = UNet_Encoder_Decoder(4)
+    model = UNet_Encoder_Decoder(3, args)
     model.to(args.device)
     model = model.apply(weight_init)
 

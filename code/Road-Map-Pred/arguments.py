@@ -48,6 +48,18 @@ def parse_args():
 						default=0.5,
 						type=float,
 						)
+	parser.add_argument("--depth_avail",
+						default=False,
+						type=bool,
+						)
+	parser.add_argument("--siamese",
+						default=False,
+						type=bool,
+						)
+	parser.add_argument("--use_orient_net",
+						default=False,
+						type=bool,
+						)
 
 
 	args = parser.parse_args()
