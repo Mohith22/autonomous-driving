@@ -87,9 +87,9 @@ def evaluate(model, valloader, args, criterion):
     with torch.no_grad():
         for data in valloader:
             sample, target, road_image, extra, depths  = data
-            sample_with_depth = torch.cat((sample, depths), dim=1)
+            sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
             road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
-            outputs = model(torch.stack(sample_with_depth).to(args.device))
+            outputs = model(sample_with_depth.to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
             if (args.loss == "both"):
                 loss = 0.5*criterion(outputs, road_image_true)
