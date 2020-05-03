@@ -37,7 +37,7 @@ transform = transforms.Compose([
 
 
 #Load data return data loaders
-def LoadData(image_folder, annotation_csv):
+def LoadData(image_folder, annotation_csv, args):
     train_labeled_scene_index = np.arange(106, 131) #128
     val_labeled_scene_index = np.arange(131, 134) #134
     labeled_trainset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv, 
@@ -46,8 +46,8 @@ def LoadData(image_folder, annotation_csv):
     labeled_valset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,
         scene_index=val_labeled_scene_index,transform=transform,extra_info=True)
 
-    trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
-    valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
+    trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=args.per_gpu_batch_size, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
+    valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=args.per_gpu_batch_size, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
 
     return trainloader, valloader
 
@@ -74,7 +74,7 @@ def dice_loss(input, target):
     return 1 - ((2. * intersection + smooth) /
               (iflat.sum() + tflat.sum() + smooth))
 
-def evaluate(model, valloader, args):
+def evaluate(model, valloader, args, criterion):
     model.eval()
     ts = 0
     loss = 0
@@ -83,13 +83,20 @@ def evaluate(model, valloader, args):
             sample, target, road_image, extra  = data
             road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
             outputs = model(torch.stack(sample).to(args.device))
-            outputs = torch.sigmoid(outputs)
-            loss += dice_loss(road_image_true, outputs)
             outputs = torch.squeeze(outputs,dim=1)
-            outputs = outputs >= 0.5
+            if (args.loss == "both"):
+                loss = 0.5*criterion(outputs, road_image_true)
+                outputs = torch.sigmoid(outputs)
+                loss += 0.5*dice_loss(road_image_true, outputs)
+            elif (args.loss == "dice"):
+                outputs = torch.sigmoid(outputs)
+                loss = dice_loss(road_image_true, outputs)
+            elif (args.loss == "bce"):
+                loss = criterion(outputs, road_image_true)
+            outputs = (outputs >= args.thres).float()
             ts += BatchThreatScore(road_image_true, outputs)
 
-    return loss/(8*len(valloader)), ts/(len(valloader)*8)
+    return loss/(args.per_gpu_batch_size*len(valloader)), ts/(len(valloader)*args.per_gpu_batch_size)
 
 def main():
 
@@ -100,7 +107,7 @@ def main():
     annotation_csv = args.annotation_dir
     model_dir = args.model_dir
 
-    trainloader, valloader = LoadData(image_folder, annotation_csv)
+    trainloader, valloader = LoadData(image_folder, annotation_csv, args)
 
     model = UNet_Encoder_Decoder(3)
     model.to(args.device)
@@ -114,9 +121,9 @@ def main():
         os.mkdir(model_dir)
 
     best_eval_acc = 0.0
-    model.load_state_dict(torch.load(os.path.join(model_dir,"bestmodel_6.pth")))
+    #model.load_state_dict(torch.load(os.path.join(model_dir,"bestmodel_6.pth")))
 
-    for epoch in tqdm(range(7, num_epochs)):
+    for epoch in tqdm(range(num_epochs)):
         running_loss = 0.0
         data_len = len(trainloader)
         model.train()
@@ -127,7 +134,7 @@ def main():
             outputs = model(torch.stack(sample).to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
             if (args.loss == "both"):
-                loss = 0.5*criterion(road_image_true, outputs)
+                loss = 0.5*criterion(outputs, road_image_true)
                 outputs = torch.sigmoid(outputs)
                 loss += 0.5*dice_loss(road_image_true, outputs)
                 loss.backward()
@@ -136,14 +143,14 @@ def main():
                 loss = dice_loss(road_image_true, outputs)
                 loss.backward()
             elif (args.loss == "bce"):
-                loss = criterion(road_image_true.unsqueeze(dim=1), outputs.unsqueeze(dim=1))
+                loss = criterion(outputs, road_image_true)
                 loss.backward()
 
             optimizer.step()
             running_loss += loss.item()
 
-        eval_loss, eval_acc = evaluate(model, valloader, args)
-        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (8*data_len), eval_loss, eval_acc))
+        eval_loss, eval_acc = evaluate(model, valloader, args, criterion)
+        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (args.per_gpu_batch_size*data_len), eval_loss, eval_acc))
         
         torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
         if eval_acc > best_eval_acc: 

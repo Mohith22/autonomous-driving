@@ -10,6 +10,10 @@ def parse_args():
 						help="Data file path",
 						required=True,
 						)
+	parser.add_argument("--depth_dir", 
+						type=str,
+						help="Depth file path",
+						)
 	parser.add_argument("--annotation_dir", 
 						type=str,
 						required=True,
@@ -39,6 +43,10 @@ def parse_args():
 	parser.add_argument("--loss",
 						default="dice",
 						type=str,
+						)
+	parser.add_argument("--thres",
+						default=0.5,
+						type=float,
 						)
 
 

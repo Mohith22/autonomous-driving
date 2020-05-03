@@ -113,14 +113,14 @@ class LabeledDataset(torch.utils.data.Dataset):
         for image_name in image_names:
             image_path = os.path.join(sample_path, image_name)
             image = Image.open(image_path)
-            images.append(self.transform(image))
+            images.append(self.transform[0](image))
         image_tensor = torch.stack(images)
 
         depths = []
         for depth_image in image_names:
             depth_path = os.path.join(sample_depth_path, depth_image)
             image = Image.open(depth_path)
-            depths.append(self.transform(image))
+            depths.append(self.transform[1](image))
         depth_tensor = torch.stack(depths)
 
         data_entries = self.annotation_dataframe[(self.annotation_dataframe['scene'] == scene_id) & (self.annotation_dataframe['sample'] == sample_id)]
