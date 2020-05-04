@@ -93,16 +93,16 @@ def evaluate(model, valloader, args, criterion):
             outputs = model(sample_with_depth.to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
             if (args.loss == "both"):
-                loss = 0.5*criterion(outputs, road_image_true)
+                loss = 0.5*criterion(outputs, target_seg_mask)
                 outputs = torch.sigmoid(outputs)
-                loss += 0.5*dice_loss(road_image_true, outputs)
+                loss += 0.5*dice_loss(target_seg_mask, outputs)
             elif (args.loss == "dice"):
                 outputs = torch.sigmoid(outputs)
-                loss = dice_loss(road_image_true, outputs)
+                loss = dice_loss(target_seg_mask, outputs)
             elif (args.loss == "bce"):
-                loss = criterion(outputs, road_image_true)
+                loss = criterion(outputs, target_seg_mask)
             outputs = (outputs >= args.thres).float()
-            ts += BatchThreatScore(road_image_true, outputs)
+            ts += BatchThreatScore(target_seg_mask, outputs)
 
     return loss/(args.per_gpu_batch_size*len(valloader)), ts/(args.per_gpu_batch_size*len(valloader))
 
