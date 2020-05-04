@@ -137,21 +137,22 @@ def main():
         for i, data in enumerate(trainloader, 0):
             sample, target, road_image, extra, depths  = data
             sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
-            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
+#            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
+            target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
             optimizer.zero_grad()
             outputs = model(sample_with_depth.to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
             if (args.loss == "both"):
-                loss = 0.5*criterion(outputs, road_image_true)
+                loss = 0.5*criterion(outputs, target_seg_mask)
                 outputs = torch.sigmoid(outputs)
-                loss += 0.5*dice_loss(road_image_true, outputs)
+                loss += 0.5*dice_loss(target_seg_mask, outputs)
                 loss.backward()
             elif (args.loss == "dice"):
                 outputs = torch.sigmoid(outputs)
-                loss = dice_loss(road_image_true, outputs)
+                loss = dice_loss(target_seg_mask, outputs)
                 loss.backward()
             elif (args.loss == "bce"):
-                loss = criterion(outputs, road_image_true)
+                loss = criterion(outputs, target_seg_mask)
                 loss.backward()
 
             optimizer.step()
