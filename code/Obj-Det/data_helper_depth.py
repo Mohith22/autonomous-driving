@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from helper import convert_map_to_lane_map, convert_map_to_road_map
+from helper import convert_map_to_lane_map, convert_map_to_road_map, convert_target_to_seg_mask
 
 NUM_SAMPLE_PER_SCENE = 126
 NUM_IMAGE_PER_SAMPLE = 6
@@ -136,6 +136,8 @@ class LabeledDataset(torch.utils.data.Dataset):
         target['bounding_box'] = torch.as_tensor(corners).view(-1, 2, 4)
         target['category'] = torch.as_tensor(categories)
 
+        target_map = convert_target_to_seg_mask(target['bounding_box'])
+
         if self.extra_info:
             actions = data_entries.action_id.to_numpy()
             # You can change the binary_lane to False to get a lane with 
@@ -146,9 +148,9 @@ class LabeledDataset(torch.utils.data.Dataset):
             extra['ego_image'] = ego_image
             extra['lane_image'] = lane_image
 
-            return image_tensor, target, road_image, extra, depth_tensor
+            return image_tensor, target_map, road_image, extra, depth_tensor
         
         else:
-            return image_tensor, target, road_image, depth_tensor
+            return image_tensor, target_map, road_image, depth_tensor
 
     
