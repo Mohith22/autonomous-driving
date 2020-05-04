@@ -11,7 +11,7 @@ import cv2
 def get_top_down_cord(x):
     return int(x * 10 + 400)
 
-def convert_target_to_seg_mask(boxes,ind):
+def convert_target_to_seg_mask(boxes):
     # [Nobjs, 2, 4]
     seg_mask = np.zeros((800,800),dtype = np.int32)
     for box in boxes:
