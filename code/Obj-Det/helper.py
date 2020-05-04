@@ -6,17 +6,34 @@ import torch.nn.functional as F
 import torchvision
 
 import torch.nn.init as init
+import cv2
+# def convert_target_to_seg_mask(boxes):
+#     # [Nobjs, 2, 4]
+#     seg_mask = torch.zeros((800,800))
+#     for box in boxes:
+#         minx = int(box[0].min() * 10 + 400)
+#         maxx = int(box[0].max() * 10 + 400)
+#         miny = int(box[1].min() * 10 + 400)
+#         maxy = int(box[1].max() * 10 + 400)
+#         seg_mask[miny:maxy+1, minx:maxx+1] = 1
+#     #print(seg_mask)
+#     return seg_mask
 
-def convert_target_to_seg_mask(boxes):
+def get_top_down_cord(x):
+    return int(x * 10 + 400)
+
+def convert_target_to_seg_mask(boxes,ind):
     # [Nobjs, 2, 4]
-    seg_mask = torch.zeros((800,800))
+    seg_mask = np.zeros((800,800),dtype = np.int32)
     for box in boxes:
-        minx = int(box[0].min() * 10 + 400)
-        maxx = int(box[0].max() * 10 + 400)
-        miny = int(box[1].min() * 10 + 400)
-        maxy = int(box[1].max() * 10 + 400)
-        seg_mask[miny:maxy+1, minx:maxx+1] = 1
-    #print(seg_mask)
+        fl = [get_top_down_cord(box[0][0].item()),get_top_down_cord(box[1][0].item())]
+        fr = [get_top_down_cord(box[0][1].item()),get_top_down_cord(box[1][1].item())]
+        br = [get_top_down_cord(box[0][3].item()),get_top_down_cord(box[1][3].item())]
+        bl = [get_top_down_cord(box[0][2].item()),get_top_down_cord(box[1][2].item())]
+        points = np.array([fl,fr,br,bl],dtype=np.int32)
+        cv2.fillPoly(seg_mask, pts =[points], color=(1,1,1))
+        
+    seg_mask = torch.from_numpy(seg_mask)
     return seg_mask
 
 def convert_map_to_lane_map(ego_map, binary_lane):
