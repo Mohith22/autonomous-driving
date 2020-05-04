@@ -7,9 +7,12 @@ def parse_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--data_dir", 
 						type=str,
-						default="../data",
 						help="Data file path",
 						required=True,
+						)
+	parser.add_argument("--depth_dir", 
+						type=str,
+						help="Depth file path",
 						)
 	parser.add_argument("--annotation_dir", 
 						type=str,
@@ -37,7 +40,23 @@ def parse_args():
 						default=0,
 						type=int,
 						)
-	parser.add_argument("--use_bce",
+	parser.add_argument("--loss",
+						default="dice",
+						type=str,
+						)
+	parser.add_argument("--thres",
+						default=0.5,
+						type=float,
+						)
+	parser.add_argument("--depth_avail",
+						default=False,
+						type=bool,
+						)
+	parser.add_argument("--siamese",
+						default=False,
+						type=bool,
+						)
+	parser.add_argument("--use_orient_net",
 						default=False,
 						type=bool,
 						)
