@@ -335,29 +335,29 @@ class UNet_Encoder_Decoder(nn.Module):
         for _ in range(6):
             self.encoders.append(UNet_Encoder(in_channels,32))    # n_channels (input channels) = 3 & n_classes (output channels) = 32
         self.decoder = UNet_Decoder()
+        self.depth_decoder = UNet_Depth_Decoder()
         self.sigmoid = nn.Sigmoid()
         self.depth_encoders = nn.ModuleList()
         self.siamese = args.siamese
         self.depth_avail = args.depth_avail
         self.use_orient_net = args.use_orient_net
-        if (self.use_orient_net):
-          self.orient_net = nn.Sequential(
-              nn.Conv2d(64, 64, kernel_size=3, padding=1),
-              nn.BatchNorm2d(64),
-              nn.ReLU(inplace=True),
-              nn.Conv2d(64, 64, kernel_size=3, padding=1),
-              nn.BatchNorm2d(64),
-              nn.ReLU(inplace=True),
-              nn.Conv2d(64, 32, kernel_size=3, padding=1),
-              nn.BatchNorm2d(32),
-              nn.ReLU(inplace=True),
-              nn.Conv2d(32, 32, kernel_size=3, padding=1),
-              nn.BatchNorm2d(32),
-              nn.ReLU(inplace=True),
-              nn.Conv2d(32, 32, kernel_size=3, padding=1),
-              nn.BatchNorm2d(32),
-              nn.ReLU(inplace=True)
-              )
+        self.orient_net = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+            )
         self.enc_bottleneck = nn.Conv2d(384,192, kernel_size=3, padding=1)
         if (not args.siamese):
             for _ in range(6):
@@ -390,13 +390,16 @@ class UNet_Encoder_Decoder(nn.Module):
         if (self.use_orient_net):
             for i in range(6):
                 encoder_outs[i] = self.orient_net(encoder_outs[i])
-            
+        
+        decoder_depth_outs = []
+        for i in range(6):
+          decoder_depth_outs.append(self.depth_decoder(encoder_outs[i]))
+        decoder_depth_output = torch.cat(decoder_depth_outs,dim=1)
         encoder_output = torch.cat(encoder_outs,dim=1)
-        if (not self.use_orient_net):
-            encoder_output= self.enc_bottleneck(encoder_output)
-        decoder_output = self.decoder(encoder_output)
-        return decoder_output
-
+        #if (not self.use_orient_net):
+        #    encoder_output= self.enc_bottleneck(encoder_output)
+        decoder_downstream_output = self.decoder(encoder_output)
+        return decoder_downstream_output, decoder_depth_output
 
 # ---------------- UNET ENCODER ---------------- #
 class UNet_Encoder(nn.Module):
@@ -445,7 +448,58 @@ class UNet_Encoder(nn.Module):
         logits = self.outc1(x)
         return logits
 
+# ---------------- UNET DECODER ---------------- #
+class UNet_Depth_Decoder(nn.Module):
+    def __init__(self):
+        super(UNet_Depth_Decoder, self).__init__()
+#        #Size:- 32 x 128 x 152
+        self.decoder_features = nn.Sequential(
 
+            nn.Upsample(size=(128, 153), mode='bilinear', align_corners=True),
+
+#            nn.ConvTranspose2d(384, 192, kernel_size=4, stride=2, padding=1),
+
+            nn.Conv2d(32,64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(64,128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(128, 192, kernel_size=3, padding=1),
+            nn.BatchNorm2d(192),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(192, 96, kernel_size=4, stride=2, padding=1),
+
+            nn.Conv2d(96,96, kernel_size=3, padding=1),
+            nn.BatchNorm2d(96),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(96,96, kernel_size=3, padding=1),
+            nn.BatchNorm2d(96),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(96, 48, kernel_size=3, padding=1),
+            nn.BatchNorm2d(48),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(48,32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(32,16, kernel_size=3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(16, 1, kernel_size=3, padding=1),
+
+            #Current Size:- 1 x 800 x 800
+        )
+        
+    def forward(self,x):
+        return self.decoder_features(x)
 
 # ---------------- UNET DECODER ---------------- #
 class UNet_Decoder(nn.Module):

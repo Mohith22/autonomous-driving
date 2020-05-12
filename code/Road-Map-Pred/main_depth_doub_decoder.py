@@ -20,7 +20,7 @@ from arguments import parse_args
 from data_helper_depth import UnlabeledDataset, LabeledDataset
 from helper import collate_fn, draw_box, weight_init
 
-from model import *
+from model_doub_decoder import *
 
 def set_seed(seed):
     random.seed(seed)
@@ -29,15 +29,11 @@ def set_seed(seed):
 
 #transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 transform_depth = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.5], std=[0.5]),
 ])
@@ -80,30 +76,47 @@ def dice_loss(input, target):
     return 1 - ((2. * intersection + smooth) /
               (iflat.sum() + tflat.sum() + smooth))
 
-def evaluate(model, valloader, args, criterion):
+def evaluate(model, valloader, args, all_criterion):
     model.eval()
-    ts = 0
-    loss = 0
+    ts = 0.0
+    roadmap_loss = 0.0
+    depth_loss = 0.0
+    criterion, mse_criterion = all_criterion
+
     with torch.no_grad():
         for data in valloader:
-            sample, target, road_image, extra, depths  = data
-            sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
-            target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
-            outputs = model(sample_with_depth.to(args.device))
-            outputs = torch.squeeze(outputs,dim=1)
-            if (args.loss == "both"):
-                loss = 0.5*criterion(outputs, target_seg_mask)
-                outputs = torch.sigmoid(outputs)
-                loss += 0.5*dice_loss(target_seg_mask, outputs)
-            elif (args.loss == "dice"):
-                outputs = torch.sigmoid(outputs)
-                loss = dice_loss(target_seg_mask, outputs)
-            elif (args.loss == "bce"):
-                loss = criterion(outputs, target_seg_mask)
-            outputs = (outputs >= args.thres).float()
-            ts += BatchThreatScore(target_seg_mask, outputs)
 
-    return loss/(args.per_gpu_batch_size*len(valloader)), ts/(args.per_gpu_batch_size*len(valloader))
+            sample, target, road_image, extra, depths  = data
+            #sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
+            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
+            depth_map_true = torch.stack([torch.Tensor(x.numpy()) for x in depths]).to(args.device)
+            depth_map_true = depth_map_true.squeeze(dim=2)
+            outputs_roadmap, outputs_depth = model(torch.stack(sample).to(args.device))
+            outputs_roadmap = torch.squeeze(outputs_roadmap,dim=1)
+            loss1 =0.0
+            loss2 = 0.0
+            if (args.loss == "both"):
+                loss1 = 0.5*criterion(outputs_roadmap, road_image_true)
+                outputs_roadmap = torch.sigmoid(outputs_roadmap)
+                loss1 += 0.5*dice_loss(road_image_true, outputs_roadmap)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss2 = mse_criterion(outputs_depth,depth_map_true)
+            elif (args.loss == "dice"):
+                outputs = torch.sigmoid(outputs_roadmap)
+                loss1 = dice_loss(road_image_true, outputs_roadmap)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss2 = mse_criterion(outputs_depth,depth_map_true)
+            elif (args.loss == "bce"):
+                loss1 = criterion(outputs_roadmap, road_image_true)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss2 = mse_criterion(outputs_depth,depth_map_true)
+
+            outputs_roadmap = (outputs_roadmap >= args.thres).float()
+            ts += BatchThreatScore(road_image_true, outputs_roadmap)
+            roadmap_loss += loss1.item()
+            depth_loss += loss2.item()
+
+    return roadmap_loss/(args.per_gpu_batch_size*len(valloader)), depth_loss/(args.per_gpu_batch_size*len(valloader)), ts/(args.per_gpu_batch_size*len(valloader))
 
 def main():
 
@@ -123,6 +136,7 @@ def main():
 
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
     criterion = nn.BCEWithLogitsLoss()
+    mse_criterion = nn.MSELoss()
     num_epochs = args.num_train_epochs
 
     if (not os.path.exists(model_dir)):
@@ -136,30 +150,38 @@ def main():
         model.train()
         for i, data in enumerate(trainloader, 0):
             sample, target, road_image, extra, depths  = data
-            sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
-#            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
-            target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
+            #sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
+            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
+            depth_map_true = torch.stack([torch.Tensor(x.numpy()) for x in depths]).to(args.device)
+            depth_map_true = depth_map_true.squeeze(dim=2)
             optimizer.zero_grad()
-            outputs = model(sample_with_depth.to(args.device))
-            outputs = torch.squeeze(outputs,dim=1)
+            outputs_roadmap, outputs_depth = model(torch.stack(sample).to(args.device))
+            outputs_roadmap = torch.squeeze(outputs_roadmap,dim=1)
+            loss = 0.0
             if (args.loss == "both"):
-                loss = 0.5*criterion(outputs, target_seg_mask)
-                outputs = torch.sigmoid(outputs)
-                loss += 0.5*dice_loss(target_seg_mask, outputs)
+                loss = 0.5*criterion(outputs_roadmap, road_image_true)
+                outputs_roadmap = torch.sigmoid(outputs_roadmap)
+                loss += 0.5*dice_loss(road_image_true, outputs_roadmap)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss += mse_criterion(outputs_depth,depth_map_true)
                 loss.backward()
             elif (args.loss == "dice"):
-                outputs = torch.sigmoid(outputs)
-                loss = dice_loss(target_seg_mask, outputs)
+                outputs_roadmap = torch.sigmoid(outputs_roadmap)
+                loss = dice_loss(road_image_true, outputs_roadmap)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss += mse_criterion(outputs_depth,depth_map_true)
                 loss.backward()
             elif (args.loss == "bce"):
-                loss = criterion(outputs, target_seg_mask)
+                loss = criterion(outputs_roadmap, road_image_true)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss += mse_criterion(outputs_depth,depth_map_true)
                 loss.backward()
 
             optimizer.step()
             running_loss += loss.item()
 
-        eval_loss, eval_acc = evaluate(model, valloader, args, criterion)
-        print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (args.per_gpu_batch_size*data_len), eval_loss, eval_acc))
+        eval_roadmap_loss, eval_depth_loss, eval_acc = evaluate(model, valloader, args, (criterion,mse_criterion))
+        print('[%d, %5d] Loss: %.3f Eval Roadmap Loss: %.3f Eval Depth Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (args.per_gpu_batch_size*data_len), eval_roadmap_loss, eval_depth_loss, eval_acc))
         
         torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
         if eval_acc > best_eval_acc: 
@@ -167,7 +189,7 @@ def main():
             best_eval_acc = eval_acc
 
 if __name__ == '__main__':
-	main()
+    main()
 
 
 
