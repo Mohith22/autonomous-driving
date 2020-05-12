@@ -88,6 +88,10 @@ def evaluate(model, valloader, args, criterion):
         for data in valloader:
             sample, target, road_image, extra, depths  = data
             sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
+<<<<<<< HEAD
+=======
+#            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
+>>>>>>> 3e874f53810ee7e2f24b5a1c7b646d9b987e7308
             target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
             outputs = model(sample_with_depth.to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
