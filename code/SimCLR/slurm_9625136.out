@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "run.py", line 1, in <module>
+    from simclr import SimCLR
+  File "/scratch/aar653/DL_SSL/code/SimCLR/simclr.py", line 1, in <module>
+    import torch
+  File "/home/aar653/miniconda2_v2/envs/condaenv3/lib/python3.7/site-packages/torch/__init__.py", line 81, in <module>
+    from torch._C import *
+ImportError: libcudart.so.10.0: cannot open shared object file: No such file or directory
