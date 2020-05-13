@@ -20,14 +20,8 @@ from arguments import parse_args
 
 from data_helper_depth import UnlabeledDataset, LabeledDataset
 from helper import collate_fn, draw_box, weight_init
-
+from utils import *
 from model import *
-
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
 
 transform = transforms.Compose([
     transforms.Resize(256),
@@ -58,28 +52,6 @@ def LoadData(depth_folder, image_folder, annotation_csv, args):
 
     return trainloader, valloader
 
-#ThreatScore Per Sample - Determines Model Performance - Challenge Metric
-def ThreatScore(true, pred):
-    tp = (true * pred).sum()
-    return (tp * 1.0 / (true.sum() + pred.sum() - tp)).item()
-
-#ThreatScore Per Batch- Determines Model Performance - Challenge Metric
-def BatchThreatScore(true, pred):
-    batch_size = true.size(0)
-    true = true.reshape(batch_size, -1)
-    pred = pred.reshape(batch_size, -1)
-    tp = (true * pred).sum(1)
-    return (tp * 1.0 / (true.sum(1) + pred.sum(1) - tp)).sum().item()
-
-def dice_loss(input, target):
-    smooth = 1.
-
-    iflat = input.view(-1)
-    tflat = target.view(-1)
-    intersection = (iflat * tflat).sum()
-    
-    return 1 - ((2. * intersection + smooth) /
-              (iflat.sum() + tflat.sum() + smooth))
 
 def evaluate(model, valloader, args, criterion):
     model.eval()
@@ -107,6 +79,7 @@ def evaluate(model, valloader, args, criterion):
     return loss/(args.per_gpu_batch_size*len(valloader)), ts/(args.per_gpu_batch_size*len(valloader))
 
 def train_epoch(model, trainloader, args, criterion):
+    running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         sample, target, road_image, extra, depths  = data
         sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
@@ -157,7 +130,6 @@ def main():
     best_eval_acc = 0.0
 
     for epoch in tqdm(range(num_epochs)):
-        running_loss = 0.0
         data_len = len(trainloader)
         model.train()
         running_loss, model = train_epoch(trainloader, model, args, criterion)

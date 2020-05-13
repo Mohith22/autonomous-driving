@@ -22,13 +22,9 @@ from arguments import parse_args
 
 from data_helper import UnlabeledDataset, LabeledDataset
 from helper import collate_fn, draw_box, weight_init, convert_target_to_seg_mask
-
+from utils import *
 from model import *
 
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
 #transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
@@ -59,29 +55,6 @@ def LoadData(image_folder, annotation_csv, args):
 
         return trainloader, valloader
 
-#ThreatScore Per Sample - Determines Model Performance - Challenge Metric
-def ThreatScore(true, pred):
-    tp = (true * pred).sum()
-    return (tp * 1.0 / (true.sum() + pred.sum() - tp)).item()
-
-#ThreatScore Per Batch- Determines Model Performance - Challenge Metric
-def BatchThreatScore(true, pred):
-    batch_size = true.size(0)
-    true = true.reshape(batch_size, -1)
-    pred = pred.reshape(batch_size, -1)
-    tp = (true * pred).sum(1)
-    return (tp * 1.0 / (true.sum(1) + pred.sum(1) - tp)).sum().item()
-
-def dice_loss(input, target):
-    smooth = 1.
-
-    iflat = input.view(-1)
-    tflat = target.view(-1)
-    intersection = (iflat * tflat).sum()
-    
-    return 1 - ((2. * intersection + smooth) /
-              (iflat.sum() + tflat.sum() + smooth))
-
 def evaluate(model, valloader, args):
     model.eval()
     ts = 0
@@ -106,7 +79,8 @@ def evaluate(model, valloader, args):
 
     return loss/(8*len(valloader)), ts/(len(valloader)*8)
 
-def traini_epoch(model, trainloader, epohcs, criterion):
+def train_epoch(model, trainloader, args, criterion):
+    running_loss = 0
     for i, data in enumerate(trainloader, 0):
             sample, target, road_image, extra  = data
             target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
@@ -156,12 +130,12 @@ def main():
     best_eval_acc = 0.0
 
     for epoch in tqdm(range(num_epochs)):
-        running_loss = 0.0
         data_len = len(trainloader)
         model.train()
-        running_loss, model = run
+        running_loss, model = train_epoch(model, trainloader, )
 
-        eval_loss, eval_acc = evaluate(model, valloader, args)
+        eval_loss, eval_acc = evaluate(model, valloader, args, criterion)
+        
         print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (8*data_len), eval_loss, eval_acc))
         
         torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
