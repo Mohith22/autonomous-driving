@@ -24,13 +24,8 @@ import torch.nn.init as init
 
 from data_helper import UnlabeledDataset, LabeledDataset
 from helper import collate_fn, draw_box, weight_init
-
+from utils import *
 from model import *
-
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -69,6 +64,20 @@ def evaluate(model, valloader):
     eval_acc = (100 * correct / total)
     return eval_acc
 
+def train_epoch(model, trainloader, args, criterion):
+    running_loss = 0.0
+    for i, data in enumerate(trainloader, 0):
+        model.train()
+        images, labels = data
+        images, labels = images.to(device), labels.to(device)
+        optimizer.zero_grad()
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+    return running_loss, model
+
 def main():
 
     args = parse_args()
@@ -97,17 +106,8 @@ def main():
         os.mkdir(model_dir)
 
     for epoch in tqdm(range(num_epochs)):
-        running_loss = 0.0
-        for i, data in enumerate(trainloader, 0):
-            model.train()
-            images, labels = data
-            images, labels = images.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
+
+        running_loss, model = train_epoch(model, trainloader, args, criterion)
 
         print('[%d, %5d] loss: %f' % (epoch + 1, num_epochs, running_loss/len(trainloader)))
         eval_acc = evaluate(model, valloader)
