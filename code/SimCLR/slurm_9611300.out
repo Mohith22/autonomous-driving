@@ -1,0 +1,5 @@
+Please install apex for mixed precision training from: https://github.com/NVIDIA/apex
+Running on: cuda
+Files already downloaded and verified
+Feature extractor: resnet18
+Pre-trained weights not found. Training from scratch.
