@@ -5,7 +5,6 @@
 ## Contributors: Vikas Patidar, Mohith Damarapati, Alfred Ajay Aureate Rajakumar
 
 ## Run command 
-## Check arguments file to know about the options given
 python *main_file*.py --data_dir "data-dir" --depth_dir "depth-data-dir" --annotation_dir "data-dir/annotation.csv" --model_dir "save-models" --cuda --num_train_epochs 2 --per_gpu_batch_size 2 --depth_avail True --loss bce --siamese True --use_orient_net True 
 
 # Abstract
