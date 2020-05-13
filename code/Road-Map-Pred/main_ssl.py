@@ -1,3 +1,8 @@
+# -- Imports -- #
+
+# From this experiment we showed that image-level pretext tasks are too easy to learn and they
+# will not be useful for our task
+
 import os
 import random
 from  tqdm import tqdm
@@ -14,7 +19,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
-#from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 import torch.optim as optim
 import torch.nn.init as init
 

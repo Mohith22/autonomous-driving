@@ -1,3 +1,5 @@
+# -- Imports -- #
+# Main file for data augmentation #
 import os
 import random
 from  tqdm import tqdm
@@ -47,31 +49,13 @@ def LoadData(image_folder, annotation_csv, args):
                 extra_datasets.append(LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,scene_index=train_labeled_scene_index, transform=t, extra_info=True))
         trainloader = torch.utils.data.DataLoader(torch.utils.data.ConcatDataset(extra_datasets), batch_size=args.per_gpu_batch_size, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory = True)
 
-
-        #labeled_trainset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv, scene_index=train_labeled_scene_index, transform=transform, extra_info=True)
-
         labeled_valset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,
                 scene_index=val_labeled_scene_index,transform=transform,extra_info=True)
 
-        #trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory = True)
         valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=args.per_gpu_batch_size, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory = True)
 
         return trainloader, valloader
 
-# #Load data return data loaders
-# def LoadData(image_folder, annotation_csv, args):
-#     train_labeled_scene_index = np.arange(106, 131) #128
-#     val_labeled_scene_index = np.arange(131, 134) #134
-#     labeled_trainset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv, 
-#         scene_index=train_labeled_scene_index, transform=transform, extra_info=True)
-
-#     labeled_valset = LabeledDataset(image_folder=image_folder, annotation_file=annotation_csv,
-#         scene_index=val_labeled_scene_index,transform=transform,extra_info=True)
-
-#     trainloader = torch.utils.data.DataLoader(labeled_trainset, batch_size=args.per_gpu_batch_size, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
-#     valloader = torch.utils.data.DataLoader(labeled_valset, batch_size=args.per_gpu_batch_size, shuffle=True, num_workers=4, collate_fn=collate_fn, pin_memory=True)
-
-#     return trainloader, valloader
 
 #ThreatScore Per Sample - Determines Model Performance - Challenge Metric
 def ThreatScore(true, pred):
@@ -132,36 +116,9 @@ def evaluate(model, valloader, args, criterion):
 
     return roadmap_loss/(args.per_gpu_batch_size*len(valloader)), objdet_loss/(args.per_gpu_batch_size*len(valloader)), ts_roadmap/(len(valloader)*args.per_gpu_batch_size), ts_objdet/(len(valloader)*args.per_gpu_batch_size)
 
-def main():
+def train_epoch(model, trainloader, args, criterion):
 
-    args = parse_args()
-    set_seed(args.seed)
-
-    image_folder = args.data_dir
-    annotation_csv = args.annotation_dir
-    model_dir = args.model_dir
-
-    trainloader, valloader = LoadData(image_folder, annotation_csv, args)
-
-    model = UNet_Encoder_Decoder(3,args)
-    model.to(args.device)
-    model = model.apply(weight_init)
-
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-    criterion = nn.BCEWithLogitsLoss()
-    num_epochs = args.num_train_epochs
-
-    if (not os.path.exists(model_dir)):
-        os.mkdir(model_dir)
-
-    best_eval_acc = 0.0
-    #model.load_state_dict(torch.load(os.path.join(model_dir,"bestmodel_6.pth")))
-
-    for epoch in tqdm(range(num_epochs)):
-        running_loss = 0.0
-        data_len = len(trainloader)
-        model.train()
-        for i, data in enumerate(trainloader, 0):
+    for i, data in enumerate(trainloader, 0):
             sample, target, road_image, extra  = data
 
             road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
@@ -190,14 +147,45 @@ def main():
 
             optimizer.step()
             running_loss += loss.item()
+def main():
+
+    args = parse_args()
+    set_seed(args.seed)
+
+    image_folder = args.data_dir
+    annotation_csv = args.annotation_dir
+    model_dir = args.model_dir
+
+    trainloader, valloader = LoadData(image_folder, annotation_csv, args)
+
+    model = UNet_Encoder_Decoder(3,args)
+    model.to(args.device)
+    model = model.apply(weight_init)
+
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    criterion = nn.BCEWithLogitsLoss()
+    num_epochs = args.num_train_epochs
+
+    if (not os.path.exists(model_dir)):
+        os.mkdir(model_dir)
+
+    best_eval_acc = 0.0
+
+    #model.load_state_dict(torch.load(os.path.join(model_dir,"bestmodel_6.pth")))
+
+    for epoch in tqdm(range(num_epochs)):
+        running_loss = 0.0
+        data_len = len(trainloader)
+        model.train()
+        running_loss, model = train_epoch(model, trainloader, args, criterion)
 
         eval_roadmap_loss, eval_objdet_loss, eval_roadmap_acc, eval_objdet_acc  = evaluate(model, valloader, args, criterion)
         print('[%d, %5d] Loss: %.3f Eval Road Map Loss: %.3f Eval ObjDet Loss: %.3f Eval RoadMap ThreatScore: %.3f Eval ObjDet ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (args.per_gpu_batch_size*data_len), eval_roadmap_loss, eval_objdet_loss, eval_roadmap_acc, eval_objdet_acc))
         
         torch.save(model.state_dict(), os.path.join(model_dir,'model_'+str(epoch)+'.pth'))
-        # if eval_acc > best_eval_acc: 
-        #     torch.save(model.state_dict(), os.path.join(model_dir,'bestmodel_'+str(epoch)+'.pth'))
-        #     best_eval_acc = eval_acc
+        if eval_acc > best_eval_acc: 
+            torch.save(model.state_dict(), os.path.join(model_dir,'bestmodel_'+str(epoch)+'.pth'))
+            best_eval_acc = eval_acc
 
 if __name__ == '__main__':
 	main()

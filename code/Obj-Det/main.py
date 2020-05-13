@@ -1,3 +1,6 @@
+# -- Imports -- #
+
+# Old main file - without depth
 import os
 import random
 from  tqdm import tqdm
@@ -103,6 +106,30 @@ def evaluate(model, valloader, args):
 
     return loss/(8*len(valloader)), ts/(len(valloader)*8)
 
+def traini_epoch(model, trainloader, epohcs, criterion):
+    for i, data in enumerate(trainloader, 0):
+            sample, target, road_image, extra  = data
+            target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
+            #print(torch.min(target_seg_mask[0]), torch.max(target_seg_mask[0]))
+            optimizer.zero_grad()
+            outputs = model(torch.stack(sample).to(args.device))
+            outputs = torch.squeeze(outputs,dim=1)
+            if (args.loss == "both"):
+                loss = 0.5*criterion(outputs, road_image_true)
+                outputs = torch.sigmoid(outputs)
+                loss += 0.5*dice_loss(road_image_true, outputs)
+                loss.backward()
+            elif (args.loss == "dice"):
+                outputs = torch.sigmoid(outputs)
+                loss = dice_loss(road_image_true, outputs)
+                loss.backward()
+            elif (args.loss == "bce"):
+                loss = criterion(outputs, road_image_true)
+                loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+    return runninng_losos, model
+    
 def main():
 
     args = parse_args()
@@ -132,27 +159,7 @@ def main():
         running_loss = 0.0
         data_len = len(trainloader)
         model.train()
-        for i, data in enumerate(trainloader, 0):
-            sample, target, road_image, extra  = data
-            target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
-            #print(torch.min(target_seg_mask[0]), torch.max(target_seg_mask[0]))
-            optimizer.zero_grad()
-            outputs = model(torch.stack(sample).to(args.device))
-            outputs = torch.squeeze(outputs,dim=1)
-            if (args.loss == "both"):
-                loss = 0.5*criterion(outputs, road_image_true)
-                outputs = torch.sigmoid(outputs)
-                loss += 0.5*dice_loss(road_image_true, outputs)
-                loss.backward()
-            elif (args.loss == "dice"):
-                outputs = torch.sigmoid(outputs)
-                loss = dice_loss(road_image_true, outputs)
-                loss.backward()
-            elif (args.loss == "bce"):
-                loss = criterion(outputs, road_image_true)
-                loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
+        running_loss, model = run
 
         eval_loss, eval_acc = evaluate(model, valloader, args)
         print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (8*data_len), eval_loss, eval_acc))

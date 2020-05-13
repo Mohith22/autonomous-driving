@@ -1,9 +1,13 @@
+# -- Imports -- #
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
 import copy
 import torchvision.models as models
+
 # ---------------- SELF SUPERVISED CLASSIFIER ---------------- #
+# Obtained an accuracy of 98% in 2 epochs - not a good pre-text task
+
 class BasicClassifierSSL(nn.Module):
     def __init__(self):
         super(BasicClassifierSSL, self).__init__()
@@ -53,6 +57,8 @@ class BasicClassifierSSL(nn.Module):
         return x
 
 # ---------------- Modified Resnet ENCODER ---------------- #
+# Did not perform as much as UNet described below
+
 class Resnet_Encoder_Decoder(nn.Module):
     def __init__(self, use_bce=False):
         super(Resnet_Encoder_Decoder, self).__init__()
@@ -139,6 +145,8 @@ class Resnet_Decoder(nn.Module):
         return self.decoder_features(x)
 
 # ---------------- MINI ENCODER DECODER ---------------- #
+# Did not work as much as UNet
+
 class Mini_Encoder_Decoder(nn.Module):
     def __init__(self):
         super(Mini_Encoder_Decoder, self).__init__()
@@ -213,6 +221,8 @@ class Mini_Decoder(nn.Module):
         return self.decoder_features(x)
 
 # ---------------- SPATIAL ENCODER DECODER ---------------- #
+#Stiching the encoder representations in a spatial manner
+
 class Spatial_Encoder_Decoder(nn.Module):
     def __init__(self):
         super(Spatial_Encoder_Decoder, self).__init__()
@@ -327,6 +337,9 @@ class Single_Encoder_Decoder(nn.Module):
         return decoder_output
 
 # ---------------- UNET ENCODER AND DECODER ---------------- #
+# UNet Enocder Decoder
+# Pluggable siamese, orient-net and depth
+
 class UNet_Encoder_Decoder(nn.Module):
     def __init__(self, in_channels=3, args=None):
         super(UNet_Encoder_Decoder, self).__init__()
@@ -456,8 +469,6 @@ class UNet_Decoder(nn.Module):
 
             nn.Upsample(size=(200, 200), mode='bilinear', align_corners=True),
 
-#            nn.ConvTranspose2d(384, 192, kernel_size=4, stride=2, padding=1),
-
             nn.Conv2d(192,192, kernel_size=3, padding=1),
             nn.BatchNorm2d(192),
             nn.ReLU(inplace=True),
@@ -506,7 +517,6 @@ class UNet_Decoder(nn.Module):
 
 # ---------------- UNET PARTS ---------------- #
 class DoubleConv(nn.Module):
-    """(convolution => [BN] => ReLU) * 2"""
 
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super().__init__()
@@ -526,7 +536,6 @@ class DoubleConv(nn.Module):
 
 
 class Down(nn.Module):
-    """Downscaling with maxpool then double conv"""
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -540,12 +549,9 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    """Upscaling then double conv"""
 
     def __init__(self, in_channels, out_channels, bilinear=True):
         super().__init__()
-
-        # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
             self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
             self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
@@ -556,20 +562,17 @@ class Up(nn.Module):
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
-        # input is CHW
         diffY = x2.size()[2] - x1.size()[2]
         diffX = x2.size()[3] - x1.size()[3]
 
         x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
                         diffY // 2, diffY - diffY // 2])
-        # if you have padding issues, see
-        # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
-        # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
 
 
 class OutConv(nn.Module):
+
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
@@ -579,6 +582,7 @@ class OutConv(nn.Module):
 
 
 class OutConv1(nn.Module):
+
     def __init__(self, in_channels, out_channels):
         super(OutConv1, self).__init__()
         self.outconv1_encoder_features = nn.Sequential(

@@ -1,3 +1,4 @@
+# -- Imports -- #
 import os
 import random
 from  tqdm import tqdm
@@ -118,6 +119,39 @@ def evaluate(model, valloader, args, all_criterion):
 
     return roadmap_loss/(args.per_gpu_batch_size*len(valloader)), depth_loss/(args.per_gpu_batch_size*len(valloader)), ts/(args.per_gpu_batch_size*len(valloader))
 
+
+def train_epoch(model, valloader, args, all_criterion):
+
+    for i, data in enumerate(trainloader, 0):
+            sample, target, road_image, extra, depths  = data
+            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
+            depth_map_true = torch.stack([torch.Tensor(x.numpy()) for x in depths]).to(args.device)
+            depth_map_true = depth_map_true.squeeze(dim=2)
+            optimizer.zero_grad()
+            outputs_roadmap, outputs_depth = model(torch.stack(sample).to(args.device))
+            outputs_roadmap = torch.squeeze(outputs_roadmap,dim=1)
+            loss = 0.0
+            if (args.loss == "both"):
+                loss = 0.5*criterion(outputs_roadmap, road_image_true)
+                outputs_roadmap = torch.sigmoid(outputs_roadmap)
+                loss += 0.5*dice_loss(road_image_true, outputs_roadmap)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss += mse_criterion(outputs_depth,depth_map_true)
+                loss.backward()
+            elif (args.loss == "dice"):
+                outputs_roadmap = torch.sigmoid(outputs_roadmap)
+                loss = dice_loss(road_image_true, outputs_roadmap)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss += mse_criterion(outputs_depth,depth_map_true)
+                loss.backward()
+            elif (args.loss == "bce"):
+                loss = criterion(outputs_roadmap, road_image_true)
+                outputs_depth = F.relu(outputs_depth, inplace=True)
+                loss += mse_criterion(outputs_depth,depth_map_true)
+                loss.backward()
+
+            optimizer.step()
+            running_loss += loss.item()
 def main():
 
     args = parse_args()
@@ -148,37 +182,7 @@ def main():
         running_loss = 0.0
         data_len = len(trainloader)
         model.train()
-        for i, data in enumerate(trainloader, 0):
-            sample, target, road_image, extra, depths  = data
-            #sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
-            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
-            depth_map_true = torch.stack([torch.Tensor(x.numpy()) for x in depths]).to(args.device)
-            depth_map_true = depth_map_true.squeeze(dim=2)
-            optimizer.zero_grad()
-            outputs_roadmap, outputs_depth = model(torch.stack(sample).to(args.device))
-            outputs_roadmap = torch.squeeze(outputs_roadmap,dim=1)
-            loss = 0.0
-            if (args.loss == "both"):
-                loss = 0.5*criterion(outputs_roadmap, road_image_true)
-                outputs_roadmap = torch.sigmoid(outputs_roadmap)
-                loss += 0.5*dice_loss(road_image_true, outputs_roadmap)
-                outputs_depth = F.relu(outputs_depth, inplace=True)
-                loss += mse_criterion(outputs_depth,depth_map_true)
-                loss.backward()
-            elif (args.loss == "dice"):
-                outputs_roadmap = torch.sigmoid(outputs_roadmap)
-                loss = dice_loss(road_image_true, outputs_roadmap)
-                outputs_depth = F.relu(outputs_depth, inplace=True)
-                loss += mse_criterion(outputs_depth,depth_map_true)
-                loss.backward()
-            elif (args.loss == "bce"):
-                loss = criterion(outputs_roadmap, road_image_true)
-                outputs_depth = F.relu(outputs_depth, inplace=True)
-                loss += mse_criterion(outputs_depth,depth_map_true)
-                loss.backward()
-
-            optimizer.step()
-            running_loss += loss.item()
+        running_loss, model = train_epoch(model, trainloader, args, all_criterion)
 
         eval_roadmap_loss, eval_depth_loss, eval_acc = evaluate(model, valloader, args, (criterion,mse_criterion))
         print('[%d, %5d] Loss: %.3f Eval Roadmap Loss: %.3f Eval Depth Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (args.per_gpu_batch_size*data_len), eval_roadmap_loss, eval_depth_loss, eval_acc))

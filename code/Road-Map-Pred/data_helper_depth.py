@@ -1,3 +1,4 @@
+# -- Imports -- #
 import os
 from PIL import Image
 
@@ -21,6 +22,8 @@ image_names = [
     'CAM_BACK.jpeg',
     'CAM_BACK_RIGHT.jpeg',
     ]
+
+# Data loaders which return depth map #
 
 # The dataset class for unlabeled data.
 class UnlabeledDataset(torch.utils.data.Dataset):
