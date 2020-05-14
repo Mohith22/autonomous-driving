@@ -1,8 +1,8 @@
 # A Generic Approach to Predict Bird’s-Eye-View from Multi-View Scenes through Self-Supervised Monocular Depth Estimation
 
-## Prof. Yann LeCun's "Deep Learning" course project at New York University, USA
+### Prof. Yann LeCun's "Deep Learning" course project at New York University, USA
 
-## Contributors: Vikas Patidar, Mohith Damarapati, Alfred Ajay Aureate Rajakumar
+### Contributors: Vikas Patidar, Mohith Damarapati, Alfred Ajay Aureate Rajakumar
 
 ## Run command 
 python *main_file*.py --data_dir "data-dir" --depth_dir "depth-data-dir" --annotation_dir "data-dir/annotation.csv" --model_dir "save-models" --cuda --num_train_epochs 2 --per_gpu_batch_size 2 --depth_avail True --loss bce --siamese True --use_orient_net True 
