@@ -132,7 +132,7 @@ def main():
     for epoch in tqdm(range(num_epochs)):
         data_len = len(trainloader)
         model.train()
-        running_loss, model = train_epoch(model, trainloader, )
+        running_loss, model = train_epoch(model, trainloader, args, criterion )
 
         eval_loss, eval_acc = evaluate(model, valloader, args, criterion)
         
