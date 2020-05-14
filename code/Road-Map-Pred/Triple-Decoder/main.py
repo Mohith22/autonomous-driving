@@ -1,4 +1,5 @@
 # -- Imports -- #
+
 import os
 import random
 from  tqdm import tqdm
@@ -18,11 +19,13 @@ from torchvision import transforms
 import torch.optim as optim
 from arguments import parse_args
 
-from data_helper_depth import UnlabeledDataset, LabeledDataset
+from data_helper import UnlabeledDataset, LabeledDataset
 from helper import collate_fn, draw_box, weight_init
 from utils import *
 from model import *
 
+
+#transform = torchvision.transforms.ToTensor()
 transform = transforms.Compose([
     transforms.Resize(256),
     transforms.CenterCrop(224),
@@ -52,7 +55,6 @@ def LoadData(depth_folder, image_folder, annotation_csv, args):
 
     return trainloader, valloader
 
-
 def evaluate(model, valloader, args, criterion):
     model.eval()
     ts = 0
@@ -61,47 +63,47 @@ def evaluate(model, valloader, args, criterion):
         for data in valloader:
             sample, target, road_image, extra, depths  = data
             sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
-            target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
+            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
             outputs = model(sample_with_depth.to(args.device))
             outputs = torch.squeeze(outputs,dim=1)
             if (args.loss == "both"):
-                loss = 0.5*criterion(outputs, target_seg_mask)
+                loss = 0.5*criterion(outputs, road_image_true)
                 outputs = torch.sigmoid(outputs)
-                loss += 0.5*dice_loss(target_seg_mask, outputs)
+                loss += 0.5*dice_loss(road_image_true, outputs)
             elif (args.loss == "dice"):
                 outputs = torch.sigmoid(outputs)
-                loss = dice_loss(target_seg_mask, outputs)
+                loss = dice_loss(road_image_true, outputs)
             elif (args.loss == "bce"):
-                loss = criterion(outputs, target_seg_mask)
+                loss = criterion(outputs, road_image_true)
             outputs = (outputs >= args.thres).float()
-            ts += BatchThreatScore(target_seg_mask, outputs)
+            ts += BatchThreatScore(road_image_true, outputs)
 
     return loss/(args.per_gpu_batch_size*len(valloader)), ts/(args.per_gpu_batch_size*len(valloader))
 
 def train_epoch(model, trainloader, args, criterion):
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
-        sample, target, road_image, extra, depths  = data
-        sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
-        target_seg_mask = torch.stack([torch.Tensor(x.numpy()) for x in target]).to(args.device)
-        optimizer.zero_grad()
-        outputs = model(sample_with_depth.to(args.device))
-        outputs = torch.squeeze(outputs,dim=1)
-        if (args.loss == "both"):
-            loss = 0.5*criterion(outputs, target_seg_mask)
-            outputs = torch.sigmoid(outputs)
-            loss += 0.5*dice_loss(target_seg_mask, outputs)
-            loss.backward()
-        elif (args.loss == "dice"):
-            outputs = torch.sigmoid(outputs)
-            loss = dice_loss(target_seg_mask, outputs)
-            loss.backward()
-        elif (args.loss == "bce"):
-            loss = criterion(outputs, target_seg_mask)
-            loss.backward()
+            sample, target, road_image, extra, depths  = data
+            sample_with_depth = torch.cat((torch.stack(sample), torch.stack(depths)), dim=2)
+            road_image_true = torch.stack([torch.Tensor(x.numpy()) for x in road_image]).to(args.device)
+            optimizer.zero_grad()
+            outputs = model(sample_with_depth.to(args.device))
+            outputs = torch.squeeze(outputs,dim=1)
+            if (args.loss == "both"):
+                loss = 0.5*criterion(outputs, road_image_true)
+                outputs = torch.sigmoid(outputs)
+                loss += 0.5*dice_loss(road_image_true, outputs)
+                loss.backward()
+            elif (args.loss == "dice"):
+                outputs = torch.sigmoid(outputs)
+                loss = dice_loss(road_image_true, outputs)
+                loss.backward()
+            elif (args.loss == "bce"):
+                loss = criterion(outputs, road_image_true)
+                loss.backward()
 
-        optimizer.step()
-        running_loss += loss.item()
+            optimizer.step()
+            running_loss += loss.item()
     return running_loss, model
 
 def main():
@@ -132,7 +134,8 @@ def main():
     for epoch in tqdm(range(num_epochs)):
         data_len = len(trainloader)
         model.train()
-        running_loss, model = train_epoch(trainloader, model, args, criterion)
+
+        running_loss, model = train_epoch(model, trainloader, args, criterion)
 
         eval_loss, eval_acc = evaluate(model, valloader, args, criterion)
         print('[%d, %5d] Loss: %.3f Eval Loss: %.3f Eval ThreatScore: %.3f' % (epoch + 1, num_epochs, running_loss / (args.per_gpu_batch_size*data_len), eval_loss, eval_acc))

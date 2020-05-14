@@ -1,7 +1,9 @@
+# -- Imports -- #
 import argparse
 import json
 import torch
 
+# -- Argument Parameters -- #
 def parse_args():
 	
 	parser = argparse.ArgumentParser()
