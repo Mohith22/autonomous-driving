@@ -1,4 +1,4 @@
-# A Generic Approach to Predict Bird’s-Eye-View from Multi-View Scenes through Self-Supervised Monocular Depth Estimation
+## A Generic Approach to Predict Bird’s-Eye-View from Multi-View Scenes through Self-Supervised Monocular Depth Estimation
 
 ### Prof. Yann LeCun's "Deep Learning" course project at New York University, USA
 
